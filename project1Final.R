@@ -192,12 +192,15 @@ server <- function(input, output) {
     
     age_levels <- levels(covid_data$age)
     selected_ages <- age_levels[input$age_range_counts[1]:input$age_range_counts[2]]
+    
     covid_data %>%
       mutate(age = as.character(age)) %>%
       filter(sex %in% input$sex_select_counts, age %in% selected_ages) %>%
       pivot_longer(cols = c(total_deaths, covid_deaths), 
                    names_to = "death_type", values_to = "death_count") %>%
       filter(death_type %in% input$death_type_select_counts) %>%
+      mutate(age = factor(age, levels = c(as.character(seq(1, 84)), "85+"), ordered = TRUE)) %>% # Ensure age is treated as an ordered factor for correct sorting
+      arrange(age) %>%
       select(sex, age, death_type, death_count)
   })
   
@@ -209,7 +212,7 @@ server <- function(input, output) {
     selected_ages <- age_levels[input$age_range_props[1]:input$age_range_props[2]]
     count_data %>%
       filter(sex %in% input$sex_select_props, age %in% selected_ages,
-             prop_covid_death              >= input$prop_range[1], prop_covid_death <= input$prop_range[2]) %>%
+             prop_covid_death >= input$prop_range[1], prop_covid_death <= input$prop_range[2]) %>%
       select(sex, age, covid_deaths, total_deaths, prop_covid_death)
   })
   
