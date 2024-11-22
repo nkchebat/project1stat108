@@ -159,8 +159,7 @@ server <- function(input, output) {
                 min = 1, max = length(levels(covid_data$age)),
                 value = c(1, length(levels(covid_data$age))),
                 step = 1,
-                ticks = FALSE,
-                animate = TRUE)
+                ticks = FALSE)
   })
   
   output$age_range_ui_props <- renderUI({
@@ -168,8 +167,7 @@ server <- function(input, output) {
                 min = 1, max = length(levels(covid_data$age)),
                 value = c(1, length(levels(covid_data$age))),
                 step = 1,
-                ticks = FALSE,
-                animate = TRUE)
+                ticks = FALSE)
   })
   
   # Filtered data based on user inputs for visualization tab
