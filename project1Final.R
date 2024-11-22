@@ -67,13 +67,13 @@ ui <- dashboardPage(
                 box(title = "Select Sex", width = 3,
                     checkboxGroupInput("sex_select", "Sex:", 
                                        choices = levels(covid_data$sex),
-                                       selected = levels(covid_data$sex))
+                                       selected = levels(covid_data$sex)) # Default to all levels to avoid empty data
                 ),
                 box(title = "Select Death Types", width = 3,
                     checkboxGroupInput("death_type_select", "Death Types:",
                                        choices = c("COVID-19 Deaths" = "covid_deaths", 
                                                    "Total Deaths" = "total_deaths"),
-                                       selected = c("covid_deaths", "total_deaths"))
+                                       selected = c("covid_deaths", "total_deaths")) # Default to all death types
                 ),
                 box(title = "Select Age Range", width = 6,
                     uiOutput("age_range_ui") # Dynamic slider for age range
@@ -102,7 +102,7 @@ ui <- dashboardPage(
                 box(title = "Select Sex", width = 3,
                     checkboxGroupInput("sex_select_props", "Sex:", 
                                        choices = levels(covid_data$sex),
-                                       selected = levels(covid_data$sex))
+                                       selected = levels(covid_data$sex)) # Default to all levels to avoid empty data
                 ),
                 box(title = "Select Age Range for Table", width = 6,
                     uiOutput("age_range_ui_props") # Dynamic slider for age range in the table
@@ -123,13 +123,13 @@ ui <- dashboardPage(
                 box(title = "Select Sex", width = 3,
                     checkboxGroupInput("sex_select_counts", "Sex:", 
                                        choices = levels(covid_data$sex),
-                                       selected = levels(covid_data$sex))
+                                       selected = levels(covid_data$sex)) # Default to all levels to avoid empty data
                 ),
                 box(title = "Select Death Types", width = 3,
                     checkboxGroupInput("death_type_select_counts", "Death Types:",
                                        choices = c("COVID-19 Deaths" = "covid_deaths", 
                                                    "Total Deaths" = "total_deaths"),
-                                       selected = c("covid_deaths", "total_deaths"))
+                                       selected = c("covid_deaths", "total_deaths")) # Default to all death types
                 ),
                 box(title = "Select Age Range for Table", width = 6,
                     uiOutput("age_range_ui_counts") # Dynamic slider for age range in the table
@@ -174,6 +174,8 @@ server <- function(input, output) {
   
   # Filtered data based on user inputs for visualization tab
   filtered_data <- reactive({
+    req(input$sex_select, input$age_range, input$death_type_select)
+    
     age_levels <- levels(covid_data$age)
     selected_ages <- age_levels[input$age_range[1]:input$age_range[2]]
     covid_data %>%
@@ -186,6 +188,8 @@ server <- function(input, output) {
   
   # Filtered data for counts table based on user inputs
   filtered_counts <- reactive({
+    req(input$sex_select_counts, input$age_range_counts, input$death_type_select_counts)
+    
     age_levels <- levels(covid_data$age)
     selected_ages <- age_levels[input$age_range_counts[1]:input$age_range_counts[2]]
     covid_data %>%
@@ -199,20 +203,20 @@ server <- function(input, output) {
   
   # Filtered data for proportions table based on user inputs
   filtered_props <- reactive({
+    req(input$sex_select_props, input$age_range_props, input$prop_range)
+    
     age_levels <- levels(count_data$age)
     selected_ages <- age_levels[input$age_range_props[1]:input$age_range_props[2]]
     count_data %>%
       filter(sex %in% input$sex_select_props, age %in% selected_ages,
-             prop_covid_death >= input$prop_range[1], prop_covid_death <= input$prop_range[2]) %>%
+             prop_covid_death              >= input$prop_range[1], prop_covid_death <= input$prop_range[2]) %>%
       select(sex, age, covid_deaths, total_deaths, prop_covid_death)
   })
   
   # Line plot
   output$linePlot <- renderPlotly({
     data <- filtered_data()
-    if (nrow(data) == 0) {
-      return(NULL) # Avoid errors if no data matches filters
-    }
+    req(nrow(data) > 0) # Make sure data is available
     
     x_breaks <- levels(covid_data$age)
     x_labels <- ifelse(as.integer(x_breaks) %% 5 == 0 | x_breaks == "85+", x_breaks, "")
@@ -236,9 +240,8 @@ server <- function(input, output) {
   # Bar plot for Deaths by Sex and Type
   output$barPlot <- renderPlotly({
     data <- filtered_data()
-    if (nrow(data) == 0) {
-      return(NULL) # Avoid errors if no data matches filters
-    }
+    req(nrow(data) > 0) # Make sure data is available
+    
     gg <- ggplot(data, aes(x = sex, y = death_count, fill = death_type)) +
       geom_bar(stat = "identity", position = "dodge") +
       labs(title = "Deaths by Sex and Type", x = "Sex", y = "Death Count") +
@@ -248,12 +251,17 @@ server <- function(input, output) {
   
   # Proportions graph for Visualization tab
   output$propPlot <- renderPlotly({
-    data <- filtered_props()
-    if (nrow(data) == 0) {
-      return(NULL) # Avoid errors if no data matches filters
-    }
+    # Using filters from the Data Visualization tab, not the Proportions Table tab
+    req(input$sex_select, input$age_range)
     
-    gg <- ggplot(data = data, aes(x = age, y = prop_covid_death, group = sex, color = sex)) +
+    age_levels <- levels(covid_data$age)
+    selected_ages <- age_levels[input$age_range[1]:input$age_range[2]]
+    filtered_data_for_prop <- count_data %>%
+      filter(sex %in% input$sex_select, age %in% selected_ages)
+    
+    req(nrow(filtered_data_for_prop) > 0) # Make sure data is available
+    
+    gg <- ggplot(data = filtered_data_for_prop, aes(x = age, y = prop_covid_death, group = sex, color = sex)) +
       geom_line(size = 1) +
       labs(title = "Proportion of Deaths Due to COVID-19 by Age and Sex",
            x = "Age Group", y = "Proportion of COVID-19 Deaths") +
@@ -288,4 +296,4 @@ server <- function(input, output) {
 
 shinyApp(ui = ui, server = server)
 
-               
+             
