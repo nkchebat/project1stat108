@@ -16,17 +16,36 @@ covid_data$age <- c(rep(1:84, each = 2), "85+", "85+")
 covid_data$age <- factor(covid_data$age,
                          levels = c(seq(1, 84), "85+"),
                          ordered = TRUE) # Treat age as an ordered factor
+count_data <- covid_data %>% 
+  mutate(prop_covid_death = covid_deaths / total_deaths)
 
 ui <- dashboardPage(
   dashboardHeader(title = "U.S. COVID-19 Data"),
   dashboardSidebar(
     sidebarMenu(
       menuItem("Overview", tabName = "overview", icon = icon("info")),
-      menuItem("Data Visualization", tabName = "visualization", icon = icon("chart-bar")),
-      menuItem("Data Table", tabName = "table", icon = icon("table"))
+      menuItem("Data Visualizations", tabName = "visualization", icon = icon("chart-bar")),
+      menuItem("Proportions Table", tabName = "props_table", icon = icon("table")),
+      menuItem("Counts Table", tabName = "counts_table", icon = icon("table"))
     )
   ),
   dashboardBody(
+    tags$head(
+      tags$style(HTML("
+        .dataTables_wrapper .dataTables_length, 
+        .dataTables_wrapper .dataTables_filter,
+        .dataTables_wrapper .dataTables_info, 
+        .dataTables_wrapper .dataTables_paginate {
+          margin-bottom: 20px;
+        }
+        .box {
+          width: 100% !important;
+        }
+        table.dataTable {
+          width: 100% !important;
+        }
+      "))
+    ),
     tabItems(
       tabItem(tabName = "overview",
               h2("U.S. COVID-19 2020-2023 Deaths Data Dashboard"),
@@ -69,27 +88,54 @@ ui <- dashboardPage(
                 ),
                 box(title = "Deaths by Sex and Type", width = 12,
                     plotlyOutput("barPlot")
+                ),
+                fluidRow(
+                  column(width = 12, HTML("&nbsp;"))
+                ),
+                box(title = "Proportion of Deaths Due to COVID by Age and Sex", width = 12,
+                    plotlyOutput("propPlot")
                 )
               )
       ),
-      tabItem(tabName = "table",
+      tabItem(tabName = "props_table",
               fluidRow(
                 box(title = "Select Sex", width = 3,
-                    checkboxGroupInput("sex_select_table", "Sex:", 
+                    checkboxGroupInput("sex_select_props", "Sex:", 
+                                       choices = levels(covid_data$sex),
+                                       selected = levels(covid_data$sex))
+                ),
+                box(title = "Select Age Range for Table", width = 6,
+                    uiOutput("age_range_ui_props") # Dynamic slider for age range in the table
+                ),
+                box(title = "Select Proportion Range", width = 3,
+                    sliderInput("prop_range", "Proportion Range:",
+                                min = 0, max = 0.12,
+                                value = c(0, 0.12),
+                                step = 0.01)
+                ),
+                box(title = "COVID-19 Death Proportions Table", width = 12,
+                    dataTableOutput("propsTable")
+                )
+              )
+      ),
+      tabItem(tabName = "counts_table",
+              fluidRow(
+                box(title = "Select Sex", width = 3,
+                    checkboxGroupInput("sex_select_counts", "Sex:", 
                                        choices = levels(covid_data$sex),
                                        selected = levels(covid_data$sex))
                 ),
                 box(title = "Select Death Types", width = 3,
-                    checkboxGroupInput("death_type_select_table", "Death Types:",
+                    checkboxGroupInput("death_type_select_counts", "Death Types:",
                                        choices = c("COVID-19 Deaths" = "covid_deaths", 
                                                    "Total Deaths" = "total_deaths"),
                                        selected = c("covid_deaths", "total_deaths"))
                 ),
                 box(title = "Select Age Range for Table", width = 6,
-                    uiOutput("age_range_ui_table") # Dynamic slider for age range in the table
+                    uiOutput("age_range_ui_counts") # Dynamic slider for age range in the table
                 ),
-                box(title = "COVID-19 Data Table", width = 12,
-                    dataTableOutput("covidTable")
+                box(title = "COVID-19 Death Counts Table", width = 12,
+                    dataTableOutput("countsTable")
                 )
               )
       )
@@ -102,15 +148,14 @@ server <- function(input, output) {
   output$age_range_ui <- renderUI({
     sliderInput("age_range", "Age Range:",
                 min = 1, max = length(levels(covid_data$age)),
-                value = c(18, length(levels(covid_data$age))-5),
+                value = c(18, length(levels(covid_data$age)) - 5),
                 step = 1,
                 ticks = FALSE,
                 animate = TRUE)
   })
   
-  # Dynamic UI for age range slider for table
-  output$age_range_ui_table <- renderUI({
-    sliderInput("age_range_table", "Age Range for Table:",
+  output$age_range_ui_counts <- renderUI({
+    sliderInput("age_range_counts", "Age Range for Counts Table:",
                 min = 1, max = length(levels(covid_data$age)),
                 value = c(1, length(levels(covid_data$age))),
                 step = 1,
@@ -118,7 +163,16 @@ server <- function(input, output) {
                 animate = TRUE)
   })
   
-  # Filtered data based on user inputs
+  output$age_range_ui_props <- renderUI({
+    sliderInput("age_range_props", "Age Range for Proportions Table:",
+                min = 1, max = length(levels(covid_data$age)),
+                value = c(1, length(levels(covid_data$age))),
+                step = 1,
+                ticks = FALSE,
+                animate = TRUE)
+  })
+  
+  # Filtered data based on user inputs for visualization tab
   filtered_data <- reactive({
     age_levels <- levels(covid_data$age)
     selected_ages <- age_levels[input$age_range[1]:input$age_range[2]]
@@ -130,15 +184,27 @@ server <- function(input, output) {
       filter(death_type %in% input$death_type_select)
   })
   
-  filtered_table <- reactive({
+  # Filtered data for counts table based on user inputs
+  filtered_counts <- reactive({
     age_levels <- levels(covid_data$age)
-    selected_ages <- age_levels[input$age_range_table[1]:input$age_range_table[2]]
+    selected_ages <- age_levels[input$age_range_counts[1]:input$age_range_counts[2]]
     covid_data %>%
       mutate(age = as.character(age)) %>%
-      filter(sex %in% input$sex_select_table, age %in% selected_ages) %>%
+      filter(sex %in% input$sex_select_counts, age %in% selected_ages) %>%
       pivot_longer(cols = c(total_deaths, covid_deaths), 
                    names_to = "death_type", values_to = "death_count") %>%
-      filter(death_type %in% input$death_type_select_table)
+      filter(death_type %in% input$death_type_select_counts) %>%
+      select(sex, age, death_type, death_count)
+  })
+  
+  # Filtered data for proportions table based on user inputs
+  filtered_props <- reactive({
+    age_levels <- levels(count_data$age)
+    selected_ages <- age_levels[input$age_range_props[1]:input$age_range_props[2]]
+    count_data %>%
+      filter(sex %in% input$sex_select_props, age %in% selected_ages,
+             prop_covid_death >= input$prop_range[1], prop_covid_death <= input$prop_range[2]) %>%
+      select(sex, age, covid_deaths, total_deaths, prop_covid_death)
   })
   
   # Line plot
@@ -148,14 +214,14 @@ server <- function(input, output) {
       return(NULL) # Avoid errors if no data matches filters
     }
     
-    x_breaks <- levels(covid_data$age)[seq(5, length(levels(covid_data$age)), by = 5)]
-    x_breaks <- c(x_breaks, "85+")
+    x_breaks <- levels(covid_data$age)
+    x_labels <- ifelse(as.integer(x_breaks) %% 5 == 0 | x_breaks == "85+", x_breaks, "")
     
     gg <- ggplot(data, aes(x = age, y = death_count, 
                            color = sex, linetype = death_type, 
                            group = interaction(sex, death_type))) +
       geom_line() +
-      scale_x_discrete(breaks = x_breaks, limits = levels(covid_data$age)) +
+      scale_x_discrete(labels = x_labels, limits = levels(covid_data$age)) +
       labs(title = "Death Counts by Age and Death Type",
            x = "Age Group", y = "Death Count") +
       scale_color_manual(values = c("Male" = "blue", "Female" = "red"), 
@@ -167,7 +233,7 @@ server <- function(input, output) {
     ggplotly(gg)
   })
   
-  # Bar plot
+  # Bar plot for Deaths by Sex and Type
   output$barPlot <- renderPlotly({
     data <- filtered_data()
     if (nrow(data) == 0) {
@@ -180,10 +246,36 @@ server <- function(input, output) {
     ggplotly(gg)
   })
   
-  # Data table
-  output$covidTable <- renderDataTable({
-    filtered_table()
+  # Proportions graph for Visualization tab
+  output$propPlot <- renderPlotly({
+    data <- filtered_props()
+    if (nrow(data) == 0) {
+      return(NULL) # Avoid errors if no data matches filters
+    }
+    
+    gg <- ggplot(data = data, aes(x = age, y = prop_covid_death, group = sex, color = sex)) +
+      geom_line(size = 1) +
+      labs(title = "Proportion of Deaths Due to COVID-19 by Age and Sex",
+           x = "Age Group", y = "Proportion of COVID-19 Deaths") +
+      scale_color_manual(values = c("Male" = "blue", "Female" = "red"),
+                         labels = c("Male" = "Men", "Female" = "Women")) +
+      scale_x_discrete(labels = ifelse(levels(covid_data$age) %in% c(seq(5, 85, by = 5), "85+"), levels(covid_data$age), ""),
+                       limits = levels(covid_data$age)) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 0, hjust = 1))
+    
+    ggplotly(gg)
   })
+  
+  # Data table for Counts Table tab
+  output$countsTable <- renderDataTable({
+    filtered_counts()
+  }, options = list(pageLength = 15, autoWidth = TRUE))
+  
+  # Data table for Proportions Table tab
+  output$propsTable <- renderDataTable({
+    filtered_props()
+  }, options = list(pageLength = 15, autoWidth = TRUE))
   
   # Downloadable source code
   output$downloadSource <- downloadHandler(
@@ -195,3 +287,5 @@ server <- function(input, output) {
 }
 
 shinyApp(ui = ui, server = server)
+
+               
