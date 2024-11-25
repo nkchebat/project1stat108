@@ -2,8 +2,10 @@ library(shiny)
 library(shinydashboard)
 library(dplyr)
 library(ggplot2)
+library(ggpattern)
 library(tidyr)
 library(plotly)
+library(scales)
 
 # Load and preprocess the dataset
 # Data as of 06/28/2023, start date of 01/01/2020, end date of 06/24/2023
@@ -224,7 +226,11 @@ server <- function(input, output) {
     
     gg <- ggplot(data, aes(x = age, y = death_count, 
                            color = sex, linetype = death_type, 
-                           group = interaction(sex, death_type))) +
+                           group = interaction(sex, death_type),
+                           text = paste("Age:", age,
+                                        "<br>Gender:", sex,
+                                        "<br>Death Type:", death_type,  
+                                        "<br>Death Count:", comma(death_count)))) +
       geom_line() +
       scale_x_discrete(labels = x_labels, limits = levels(covid_data$age)) +
       labs(title = "Death Counts by Age and Death Type",
@@ -235,19 +241,56 @@ server <- function(input, output) {
                             labels = c("covid_deaths" = "COVID-19 Deaths", "total_deaths" = "Total Deaths (All Causes)")) +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 0, hjust = 1))
-    ggplotly(gg)
+    ggplotly(gg, tooltip = "text")
   })
   
-  # Bar plot for Deaths by Sex and Type
   output$barPlot <- renderPlotly({
     data <- filtered_data()
-    req(nrow(data) > 0) # Make sure data is available
+    req(nrow(data) > 0) # Ensure data is available
     
-    gg <- ggplot(data, aes(x = sex, y = death_count, fill = death_type)) +
+    # Summarize data to get the total death count per sex and death type
+    summarized_data <- data %>%
+      group_by(sex, death_type) %>%
+      summarise(death_count = sum(death_count, na.rm = TRUE)) %>%
+      ungroup() %>%
+      # Rename `death_type` values for display purposes
+      mutate(
+        death_type_label = case_when(
+          death_type == "covid_deaths" ~ "COVID Deaths",
+          death_type == "total_deaths" ~ "Total Deaths",
+          TRUE ~ death_type
+        ),
+        sex_death_type = paste(sex, death_type, sep = "_") # For custom colors
+      )
+    
+    # Define custom colors for each combination
+    custom_colors <- c(
+      "Male_covid_deaths" = "lightblue",
+      "Male_total_deaths" = "blue",
+      "Female_covid_deaths" = "pink",
+      "Female_total_deaths" = "red"
+    )
+    
+    # Create the ggplot object
+    gg <- ggplot(summarized_data, aes(
+      x = sex,
+      y = death_count,
+      fill = sex_death_type, # Use the new column for fill
+      text = paste("Sex:", sex,
+                   "<br>Death Type:", death_type_label, # Use renamed labels
+                   "<br>Death Count:", scales::comma(death_count))
+    )) +
       geom_bar(stat = "identity", position = "dodge") +
-      labs(title = "Deaths by Sex and Type", x = "Sex", y = "Death Count") +
-      theme_minimal()
-    ggplotly(gg)
+      labs(
+        title = "Deaths by Gender and Type",
+        x = "Gender",
+        y = "Death Count"
+      ) +
+      theme_minimal() +
+      scale_fill_manual(values = custom_colors) # Apply the custom colors
+    
+    # Convert ggplot object to Plotly for interactivity
+    ggplotly(gg, tooltip = "text")
   })
   
   # Proportions graph for Visualization tab
@@ -262,7 +305,11 @@ server <- function(input, output) {
     
     req(nrow(filtered_data_for_prop) > 0) # Make sure data is available
     
-    gg <- ggplot(data = filtered_data_for_prop, aes(x = age, y = prop_covid_death, group = sex, color = sex)) +
+    gg <- ggplot(data = filtered_data_for_prop, aes(x = age, y = prop_covid_death, group = sex, color = sex,
+                                                    text = paste("Age:", age,
+                                                                 "<br>Gender:", sex,
+                                                                 "<br>COVID Death Proportion:", round(prop_covid_death, 4), 
+                                                                 "<br>COVID Death Percentage:", round(prop_covid_death*100, 2), "%"))) +
       geom_line(size = 1) +
       labs(title = "Proportion of Deaths Due to COVID-19 by Age and Sex",
            x = "Age Group", y = "Proportion of COVID-19 Deaths") +
@@ -273,17 +320,34 @@ server <- function(input, output) {
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 0, hjust = 1))
     
-    ggplotly(gg)
+    ggplotly(gg, tooltip = "text")
   })
   
   # Data table for Counts Table tab
   output$countsTable <- renderDataTable({
-    filtered_counts()
+    filtered_counts() %>%
+      mutate(death_count = comma(death_count)) %>%
+      rename(
+        "Gender" = sex,
+        "Age Group" = age,
+        "Death Type" = death_type,
+        "Death Count" = death_count
+      )
   }, options = list(pageLength = 15, autoWidth = TRUE))
   
   # Data table for Proportions Table tab
   output$propsTable <- renderDataTable({
-    filtered_props()
+    filtered_props() %>%
+      mutate(prop_covid_death = round(prop_covid_death, 4),
+             covid_deaths = comma(covid_deaths), 
+             total_deaths = comma(total_deaths)) %>%
+      rename(
+        "Gender" = sex,
+        "Age Group" = age,
+        "Death Type" = covid_deaths,
+        "Death Count" = total_deaths,
+        "COVID Death Proportion" = prop_covid_death
+      )
   }, options = list(pageLength = 15, autoWidth = TRUE))
   
   # Downloadable source code
