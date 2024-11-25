@@ -199,7 +199,11 @@ server <- function(input, output) {
       pivot_longer(cols = c(total_deaths, covid_deaths), 
                    names_to = "death_type", values_to = "death_count") %>%
       filter(death_type %in% input$death_type_select_counts) %>%
-      mutate(age = factor(age, levels = c(as.character(seq(1, 84)), "85+"), ordered = TRUE)) %>% # Ensure age is treated as an ordered factor for correct sorting
+      mutate(age = factor(age, levels = c(as.character(seq(1, 84)), "85+"), ordered = TRUE),
+             death_type = case_when(
+               death_type == "covid_deaths" ~ "COVID Deaths",
+               death_type == "total_deaths" ~ "Total Deaths"
+             )) %>% # Ensure age is treated as an ordered factor for correct sorting
       arrange(age) %>%
       select(sex, age, death_type, death_count)
   })
@@ -221,15 +225,26 @@ server <- function(input, output) {
     data <- filtered_data()
     req(nrow(data) > 0) # Make sure data is available
     
+    # Add more user-friendly labels for death types
+    data <- data %>%
+      mutate(
+        death_type_label = case_when(
+          death_type == "covid_deaths" ~ "COVID Deaths",
+          death_type == "total_deaths" ~ "Total Deaths",
+          TRUE ~ death_type
+        )
+      )
+    
     x_breaks <- levels(covid_data$age)
     x_labels <- ifelse(as.integer(x_breaks) %% 5 == 0 | x_breaks == "85+", x_breaks, "")
     
+    # Update ggplot to use `death_type_label`
     gg <- ggplot(data, aes(x = age, y = death_count, 
-                           color = sex, linetype = death_type, 
-                           group = interaction(sex, death_type),
+                           color = sex, linetype = death_type_label, 
+                           group = interaction(sex, death_type_label),
                            text = paste("Age:", age,
                                         "<br>Gender:", sex,
-                                        "<br>Death Type:", death_type,  
+                                        "<br>Death Type:", death_type_label,  
                                         "<br>Death Count:", comma(death_count)))) +
       geom_line() +
       scale_x_discrete(labels = x_labels, limits = levels(covid_data$age)) +
@@ -237,12 +252,14 @@ server <- function(input, output) {
            x = "Age Group", y = "Death Count") +
       scale_color_manual(values = c("Male" = "blue", "Female" = "red"), 
                          labels = c("Male" = "Men", "Female" = "Women")) +
-      scale_linetype_manual(values = c("covid_deaths" = "dashed", "total_deaths" = "solid"),
-                            labels = c("covid_deaths" = "COVID-19 Deaths", "total_deaths" = "Total Deaths (All Causes)")) +
+      scale_linetype_manual(values = c("COVID Deaths" = "dashed", "Total Deaths" = "solid"),
+                            labels = c("COVID Deaths" = "COVID Deaths", "Total Deaths" = "Total Deaths (All Causes)")) +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 0, hjust = 1))
+    
     ggplotly(gg, tooltip = "text")
   })
+  
   
   output$barPlot <- renderPlotly({
     data <- filtered_data()
@@ -361,4 +378,3 @@ server <- function(input, output) {
 
 shinyApp(ui = ui, server = server)
 
-             
