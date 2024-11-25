@@ -7,17 +7,13 @@ library(tidyr)
 library(plotly)
 library(scales)
 
-# Load and preprocess the dataset
-# Data as of 06/28/2023, start date of 01/01/2020, end date of 06/24/2023
 covid_data <- read.csv("covid.csv")
-covid_data <- covid_data[, -(1:3)] # Remove metadata columns
-colnames(covid_data) <- c("sex", "age", "total_deaths", "covid_deaths") # Rename columns
-covid_data <- covid_data[-(1:4), ] # Drop metadata rows
+covid_data <- covid_data[, -(1:3)]
+colnames(covid_data) <- c("sex", "age", "total_deaths", "covid_deaths")
+covid_data <- covid_data[-(1:4), ]
 covid_data$sex <- factor(covid_data$sex)
 covid_data$age <- c(rep(1:84, each = 2), "85+", "85+")
-covid_data$age <- factor(covid_data$age,
-                         levels = c(seq(1, 84), "85+"),
-                         ordered = TRUE) # Treat age as an ordered factor
+covid_data$age <- factor(covid_data$age, levels = c(seq(1, 84), "85+"), ordered = TRUE)
 count_data <- covid_data %>% 
   mutate(prop_covid_death = covid_deaths / total_deaths)
 
@@ -50,18 +46,22 @@ ui <- dashboardPage(
     ),
     tabItems(
       tabItem(tabName = "overview",
-              h2("U.S. COVID-19 2020-2023 Deaths Data Dashboard"),
-              p("This dashboard provides interactive visualization and tables of COVID-19 data in the United States."),
-              p("Data Source:", a("U.S. Government COVID Deaths Data", 
-                                  href = "https://catalog.data.gov/dataset/provisional-covid-19-deaths-counts-by-age-in-years")),
-              h3("Description of Variables:"),
+              h2("U.S. COVID-19 Deaths Data Dashboard (2020-2023)"),
+              h3("Overview and Instructions"),
+              p(style = "text-indent: 20px;", "This interactive dashboard provides visualizations and tables data on COVID-19 and total deaths from January 1st 2020 to June 28th, 2023. The data comes from the U.S. Department of Health & Human Services and provides the number of COVID-19 deaths and the number of total deaths in the United States for every age and sex combination. One important detail to note is that the date categorizes the age of everyone over the age of 84 as “85+” which may cause their deaths to appear overrepresented in the visualizations."),
+              p(style = "text-indent: 20px;", "In the “Data Visualizations” tab, users can select from three inputs that alter which data is represented and taken into account on the visualizations. The user can select the sex of the population under the “Select Sex” input, the types of deaths under the “Select Death Types” input, and the age range under the “Select Age Range” input. Altering these inputs dictates which parts of the data are represented on the three visualizations. However, the “Death Type” input does not impact the proportion graph since both death types (COVID-19 deaths and total deaths) are required to compute the proportion of total deaths due to COVID-19. For the visualizations, within the age range input users can not only alter the age range, but they can also play an animation of the changing graph as it alters to the age range of the users by one year at a time. Users can hover over these visualizations on the lines or bars to get more detailed and specific information such as age, deaths, etc."), 
+              p(style = "text-indent: 20px;", "Users also have the option to explore two similar tables. The “Proportions Table” provides the COVID-19 and total deaths by sex and age. It also provides an additional variable regarding the proportion of deaths due to COVID-19 for each age/sex combination. Similar to the “Data Visualizations” page, users have the option to provide inputs on sex and age range as well as the ability to filter between certain proportions of deaths due to COVID-19 deaths. The second table provided is the “Counts Table” which has deaths information for the age/sex combinations. Here, users can provide three inputs: sex, death type, and age range. For both the tables, users can utilize the search bar on the top right to search for a certain value, age, sex, or proportion. Users can also alter the number of entries shown on the top left of the tables."),
+              p("Data Source:", a("U.S. Government COVID Deaths Data", href = "https://catalog.data.gov/dataset/provisional-covid-19-deaths-counts-by-age-in-years")),
+              h3("Description of Variables and Inputs:"),
               tags$ul(
-                tags$li("sex: The sex of the group (male or female)."),
-                tags$li("age: The age group of the population."),
-                tags$li("total_deaths: Total deaths in the group."),
-                tags$li("covid_deaths: Deaths attributed to COVID-19 in the group.")
+                tags$li("Sex: The sex of the group (Male or Female)"),
+                tags$li("Age: The age group of the population"),
+                tags$li("Total Deaths: Total deaths in the group"),
+                tags$li("COVID Deaths: Deaths attributed to COVID-19 in the group"), 
+                tags$li("Death Type: Type of death category, either Total Deaths or COVID Deaths"),
+                tags$li("Proportion: The proportion of deaths caused by COVID-19 in the group")
               ),
-              p("Instructions: Use the sidebar menu to explore the dashboard. Filters allow customization of plots and tables. Use the 'Download Source Code' button below to access the source code."),
+              h3("Download Source Code"),
               downloadButton("downloadSource", "Download Source Code")
       ),
       tabItem(tabName = "visualization",
@@ -69,16 +69,16 @@ ui <- dashboardPage(
                 box(title = "Select Sex", width = 3,
                     checkboxGroupInput("sex_select", "Sex:", 
                                        choices = levels(covid_data$sex),
-                                       selected = levels(covid_data$sex)) # Default to all levels to avoid empty data
+                                       selected = levels(covid_data$sex))
                 ),
                 box(title = "Select Death Types", width = 3,
                     checkboxGroupInput("death_type_select", "Death Types:",
                                        choices = c("COVID-19 Deaths" = "covid_deaths", 
                                                    "Total Deaths" = "total_deaths"),
-                                       selected = c("covid_deaths", "total_deaths")) # Default to all death types
+                                       selected = c("covid_deaths", "total_deaths"))
                 ),
                 box(title = "Select Age Range", width = 6,
-                    uiOutput("age_range_ui") # Dynamic slider for age range
+                    uiOutput("age_range_ui")
                 )
               ),
               fluidRow(
@@ -104,10 +104,10 @@ ui <- dashboardPage(
                 box(title = "Select Sex", width = 3,
                     checkboxGroupInput("sex_select_props", "Sex:", 
                                        choices = levels(covid_data$sex),
-                                       selected = levels(covid_data$sex)) # Default to all levels to avoid empty data
+                                       selected = levels(covid_data$sex))
                 ),
                 box(title = "Select Age Range for Table", width = 6,
-                    uiOutput("age_range_ui_props") # Dynamic slider for age range in the table
+                    uiOutput("age_range_ui_props")
                 ),
                 box(title = "Select Proportion Range", width = 3,
                     sliderInput("prop_range", "Proportion Range:",
@@ -125,16 +125,16 @@ ui <- dashboardPage(
                 box(title = "Select Sex", width = 3,
                     checkboxGroupInput("sex_select_counts", "Sex:", 
                                        choices = levels(covid_data$sex),
-                                       selected = levels(covid_data$sex)) # Default to all levels to avoid empty data
+                                       selected = levels(covid_data$sex))
                 ),
                 box(title = "Select Death Types", width = 3,
                     checkboxGroupInput("death_type_select_counts", "Death Types:",
                                        choices = c("COVID-19 Deaths" = "covid_deaths", 
                                                    "Total Deaths" = "total_deaths"),
-                                       selected = c("covid_deaths", "total_deaths")) # Default to all death types
+                                       selected = c("covid_deaths", "total_deaths"))
                 ),
                 box(title = "Select Age Range for Table", width = 6,
-                    uiOutput("age_range_ui_counts") # Dynamic slider for age range in the table
+                    uiOutput("age_range_ui_counts")
                 ),
                 box(title = "COVID-19 Death Counts Table", width = 12,
                     dataTableOutput("countsTable")
@@ -146,7 +146,6 @@ ui <- dashboardPage(
 )
 
 server <- function(input, output) {
-  # Dynamic UI for age range slider
   output$age_range_ui <- renderUI({
     sliderInput("age_range", "Age Range:",
                 min = 1, max = length(levels(covid_data$age)),
@@ -172,46 +171,37 @@ server <- function(input, output) {
                 ticks = FALSE)
   })
   
-  # Filtered data based on user inputs for visualization tab
   filtered_data <- reactive({
     req(input$sex_select, input$age_range, input$death_type_select)
-    
     age_levels <- levels(covid_data$age)
     selected_ages <- age_levels[input$age_range[1]:input$age_range[2]]
     covid_data %>%
       mutate(age = as.character(age)) %>%
       filter(sex %in% input$sex_select, age %in% selected_ages) %>%
-      pivot_longer(cols = c(total_deaths, covid_deaths), 
-                   names_to = "death_type", values_to = "death_count") %>%
+      pivot_longer(cols = c(total_deaths, covid_deaths), names_to = "death_type", values_to = "death_count") %>%
       filter(death_type %in% input$death_type_select)
   })
   
-  # Filtered data for counts table based on user inputs
   filtered_counts <- reactive({
     req(input$sex_select_counts, input$age_range_counts, input$death_type_select_counts)
-    
     age_levels <- levels(covid_data$age)
     selected_ages <- age_levels[input$age_range_counts[1]:input$age_range_counts[2]]
-    
     covid_data %>%
       mutate(age = as.character(age)) %>%
       filter(sex %in% input$sex_select_counts, age %in% selected_ages) %>%
-      pivot_longer(cols = c(total_deaths, covid_deaths), 
-                   names_to = "death_type", values_to = "death_count") %>%
+      pivot_longer(cols = c(total_deaths, covid_deaths), names_to = "death_type", values_to = "death_count") %>%
       filter(death_type %in% input$death_type_select_counts) %>%
       mutate(age = factor(age, levels = c(as.character(seq(1, 84)), "85+"), ordered = TRUE),
              death_type = case_when(
                death_type == "covid_deaths" ~ "COVID Deaths",
                death_type == "total_deaths" ~ "Total Deaths"
-             )) %>% # Ensure age is treated as an ordered factor for correct sorting
+             )) %>%
       arrange(age) %>%
       select(sex, age, death_type, death_count)
   })
   
-  # Filtered data for proportions table based on user inputs
   filtered_props <- reactive({
     req(input$sex_select_props, input$age_range_props, input$prop_range)
-    
     age_levels <- levels(count_data$age)
     selected_ages <- age_levels[input$age_range_props[1]:input$age_range_props[2]]
     count_data %>%
@@ -220,154 +210,136 @@ server <- function(input, output) {
       select(sex, age, covid_deaths, total_deaths, prop_covid_death)
   })
   
-  # Line plot
   output$linePlot <- renderPlotly({
     data <- filtered_data()
-    req(nrow(data) > 0) # Make sure data is available
-    
-    # Add more user-friendly labels for death types
+    req(nrow(data) > 0)
     data <- data %>%
       mutate(
         death_type_label = case_when(
-          death_type == "covid_deaths" ~ "COVID Deaths",
-          death_type == "total_deaths" ~ "Total Deaths",
+          death_type == "covid_deaths" ~ " COVID Deaths",
+          death_type == "total_deaths" ~ " Total Deaths",
           TRUE ~ death_type
         )
       )
-    
     x_breaks <- levels(covid_data$age)
     x_labels <- ifelse(as.integer(x_breaks) %% 5 == 0 | x_breaks == "85+", x_breaks, "")
-    
-    # Update ggplot to use `death_type_label`
     gg <- ggplot(data, aes(x = age, y = death_count, 
                            color = sex, linetype = death_type_label, 
                            group = interaction(sex, death_type_label),
                            text = paste("Age:", age,
-                                        "<br>Gender:", sex,
+                                        "<br>Sex:", sex,
                                         "<br>Death Type:", death_type_label,  
                                         "<br>Death Count:", comma(death_count)))) +
       geom_line() +
       scale_x_discrete(labels = x_labels, limits = levels(covid_data$age)) +
       labs(title = "Death Counts by Age and Death Type",
            x = "Age Group", y = "Death Count") +
-      scale_color_manual(values = c("Male" = "blue", "Female" = "red"), 
-                         labels = c("Male" = "Men", "Female" = "Women")) +
-      scale_linetype_manual(values = c("COVID Deaths" = "dashed", "Total Deaths" = "solid"),
-                            labels = c("COVID Deaths" = "COVID Deaths", "Total Deaths" = "Total Deaths (All Causes)")) +
+      scale_color_manual(
+        values = c("Male" = "blue", "Female" = "red"), 
+        name = "Sex, Death Type") +
+      scale_linetype_manual(
+        values = c(" COVID Deaths" = "dashed", " Total Deaths" = "solid"),
+        name = NULL) +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 0, hjust = 1))
-    
     ggplotly(gg, tooltip = "text")
   })
   
-  
   output$barPlot <- renderPlotly({
     data <- filtered_data()
-    req(nrow(data) > 0) # Ensure data is available
-    
-    # Summarize data to get the total death count per sex and death type
+    req(nrow(data) > 0)
     summarized_data <- data %>%
       group_by(sex, death_type) %>%
       summarise(death_count = sum(death_count, na.rm = TRUE)) %>%
       ungroup() %>%
-      # Rename `death_type` values for display purposes
       mutate(
         death_type_label = case_when(
           death_type == "covid_deaths" ~ "COVID Deaths",
           death_type == "total_deaths" ~ "Total Deaths",
           TRUE ~ death_type
         ),
-        sex_death_type = paste(sex, death_type, sep = "_") # For custom colors
+        sex_death_type = case_when(
+          sex == "Male" & death_type == "covid_deaths" ~ "Male COVID Deaths",
+          sex == "Male" & death_type == "total_deaths" ~ "Male Total Deaths",
+          sex == "Female" & death_type == "covid_deaths" ~ "Female COVID Deaths",
+          sex == "Female" & death_type == "total_deaths" ~ "Female Total Deaths",
+          TRUE ~ paste(sex, death_type, sep = "_")
+        )
       )
-    
-    # Define custom colors for each combination
-    custom_colors <- c(
-      "Male_covid_deaths" = "lightblue",
-      "Male_total_deaths" = "blue",
-      "Female_covid_deaths" = "pink",
-      "Female_total_deaths" = "red"
-    )
-    
-    # Create the ggplot object
     gg <- ggplot(summarized_data, aes(
       x = sex,
       y = death_count,
-      fill = sex_death_type, # Use the new column for fill
+      fill = sex_death_type,
       text = paste("Sex:", sex,
-                   "<br>Death Type:", death_type_label, # Use renamed labels
+                   "<br>Death Type:", death_type_label,
                    "<br>Death Count:", scales::comma(death_count))
     )) +
       geom_bar(stat = "identity", position = "dodge") +
       labs(
-        title = "Deaths by Gender and Type",
-        x = "Gender",
-        y = "Death Count"
+        title = "Deaths by Sex and Type",
+        x = "Sex",
+        y = "Death Count",
+        fill = "Death Type"
       ) +
       theme_minimal() +
-      scale_fill_manual(values = custom_colors) # Apply the custom colors
-    
-    # Convert ggplot object to Plotly for interactivity
+      scale_fill_manual(
+        values = c("Male COVID Deaths" = "lightblue",
+                   "Male Total Deaths" = "blue",
+                   "Female COVID Deaths" = "pink",
+                   "Female Total Deaths" = "red"),
+        name = "Sex and Death Type")
     ggplotly(gg, tooltip = "text")
   })
   
-  # Proportions graph for Visualization tab
   output$propPlot <- renderPlotly({
-    # Using filters from the Data Visualization tab, not the Proportions Table tab
     req(input$sex_select, input$age_range)
-    
     age_levels <- levels(covid_data$age)
     selected_ages <- age_levels[input$age_range[1]:input$age_range[2]]
     filtered_data_for_prop <- count_data %>%
       filter(sex %in% input$sex_select, age %in% selected_ages)
-    
-    req(nrow(filtered_data_for_prop) > 0) # Make sure data is available
-    
+    req(nrow(filtered_data_for_prop) > 0)
     gg <- ggplot(data = filtered_data_for_prop, aes(x = age, y = prop_covid_death, group = sex, color = sex,
                                                     text = paste("Age:", age,
-                                                                 "<br>Gender:", sex,
+                                                                 "<br>Sex:", sex,
                                                                  "<br>COVID Death Proportion:", round(prop_covid_death, 4), 
                                                                  "<br>COVID Death Percentage:", round(prop_covid_death*100, 2), "%"))) +
       geom_line(size = 1) +
       labs(title = "Proportion of Deaths Due to COVID-19 by Age and Sex",
-           x = "Age Group", y = "Proportion of COVID-19 Deaths") +
+           x = "Age Group", y = "COVID-19 Proportion of Deaths") +
       scale_color_manual(values = c("Male" = "blue", "Female" = "red"),
-                         labels = c("Male" = "Men", "Female" = "Women")) +
+                         name = "Sex") +
       scale_x_discrete(labels = ifelse(levels(covid_data$age) %in% c(seq(5, 85, by = 5), "85+"), levels(covid_data$age), ""),
                        limits = levels(covid_data$age)) +
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 0, hjust = 1))
-    
     ggplotly(gg, tooltip = "text")
   })
   
-  # Data table for Counts Table tab
   output$countsTable <- renderDataTable({
     filtered_counts() %>%
       mutate(death_count = comma(death_count)) %>%
       rename(
-        "Gender" = sex,
+        "Sex" = sex,
         "Age Group" = age,
         "Death Type" = death_type,
         "Death Count" = death_count
       )
   }, options = list(pageLength = 15, autoWidth = TRUE))
   
-  # Data table for Proportions Table tab
   output$propsTable <- renderDataTable({
     filtered_props() %>%
       mutate(prop_covid_death = round(prop_covid_death, 4),
              covid_deaths = comma(covid_deaths), 
              total_deaths = comma(total_deaths)) %>%
       rename(
-        "Gender" = sex,
+        "Sex" = sex,
         "Age Group" = age,
-        "Death Type" = covid_deaths,
-        "Death Count" = total_deaths,
+        "COVID Deaths" = covid_deaths,
+        "Total Deaths" = total_deaths,
         "COVID Death Proportion" = prop_covid_death
       )
   }, options = list(pageLength = 15, autoWidth = TRUE))
   
-  # Downloadable source code
   output$downloadSource <- downloadHandler(
     filename = function() { "dashboard_source_code.txt" },
     content = function(file) {
@@ -377,4 +349,3 @@ server <- function(input, output) {
 }
 
 shinyApp(ui = ui, server = server)
-
